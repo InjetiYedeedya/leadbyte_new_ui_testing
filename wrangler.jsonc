@@ -3,7 +3,7 @@
   // (`opennextjs-cloudflare build` writes .open-next/). The Worker in the
   // Cloudflare dashboard MUST be named exactly as `name` below.
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "leadbyte-app",
+  "name": "leadbyte-new-ui-testing",
   // Our own entry, wrapping the Worker OpenNext builds: it answers the
   // background video and bot probes before Next starts (Error 1102, the 10ms
   // CPU limit — see lib/edge/front-door.ts).
@@ -23,7 +23,7 @@
   "services": [
     {
       "binding": "WORKER_SELF_REFERENCE",
-      "service": "leadbyte-app"
+      "service": "leadbyte-new-ui-testing"
     }
   ],
   // Keep the variables set in the Cloudflare dashboard. Without this, every
