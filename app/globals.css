@@ -1,0 +1,1311 @@
+@import "tailwindcss";
+
+/**
+ * `short:` — a laptop-shaped window with little height.
+ *
+ * A 14" laptop at 1366x768, or a 1920x1080 panel at 125-150% scaling, leaves
+ * roughly 600-730px for the page once the browser's own bars are taken. The
+ * screens built to fit ONE screen (sign-in, the Overview's opening, the
+ * Business profile's pinned chapters) were designed on a taller window and
+ * overflowed there. This tightens their spacing on such a window without
+ * touching phones, which are tall and narrow and have their own layout.
+ */
+@custom-variant short (@media (min-width: 64rem) and (max-height: 900px));
+
+/**
+ * The design tokens, in CSS.
+ *
+ * Tailwind 4 is configuration-in-CSS: this `@theme` block replaces what
+ * `tailwind.config.ts` used to hold, and each `--color-*` name generates the
+ * matching utilities (`--color-surface` → `bg-surface`, `text-surface`,
+ * `border-surface`). The token NAMES remain the contract — every component uses
+ * `bg-surface`, `text-ink-soft` and so on, so switching the whole app between
+ * light and dark is only ever these values.
+ *
+ * Two rules held throughout:
+ *   * the `-soft` colours are backgrounds and must stay pale enough for their
+ *     matching foreground to sit on top (bg-good-soft/text-good);
+ *   * `ground` is what sits on `accent` (bg-accent text-ground), so it has to
+ *     read as near-white, not as the page grey.
+ */
+@theme {
+  /* Geist supplies these two variable names itself (`geist/font/*`), so they
+     are referenced directly rather than through the old `*-face` aliases.
+     The self-reference trap still applies: `--font-sans` cannot be defined
+     as `var(--font-sans)`, which is why the source variable has a different
+     name at all. Both faces are variable weight 100-900, so the bold
+     headings across the app get a real bold cut rather than a synthesised
+     one. */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
+
+  /* The corner scale, and the reason it is set here rather than left to
+     Tailwind's defaults.
+     ------------------------------------------------------------------
+     An audit on 2026-09-21 found four radii doing the same job across the
+     app: 235 cards on `rounded-lg`, nine on `rounded-2xl` or `rounded-xl`
+     from two recent redesigns, and four on `rounded-md`. Boxes that sit
+     beside each other were visibly differently shaped, which is what a
+     reader reports as "the boxes are not the same".
+
+     Rather than rewrite 181 class strings and hope none drift back, the
+     SCALE moves. Two sizes, one job each:
+
+       `rounded-lg`  1rem    every card, panel, dialog and tile
+       `rounded-md`  0.625rem  every control: button, input, select, chip
+
+     That two-tier split is deliberate. One radius for both reads wrong in
+     opposite directions: a 16px corner on a 36px-tall input is a lozenge,
+     and an 8px corner on a 700px-wide report card is a spreadsheet cell.
+     Cards and controls are different objects and the corner says so.
+
+     Changing either number restyles the whole app, which is the point.
+     Do not reintroduce `rounded-xl` / `rounded-2xl` on a card: they are
+     still 0.75rem and 1rem here, so they would either disagree with the
+     scale or silently duplicate it. */
+  --radius-md: 0.625rem;
+  --radius-lg: 1rem;
+
+  /* The type scale, one step larger than Tailwind's defaults.
+     ────────────────────────────────────────────────────────────────────
+     The app sets body copy in `text-sm` (554 uses) and a great deal of
+     supporting text in `text-xs` (244). At Tailwind's defaults that is 14px
+     and 12px against a 16px browser default — so on a large laptop the whole
+     interface read as small, which is what it was reported as.
+
+     Rescaling the TOKENS rather than the 800 class names is the same move the
+     colours use: the names are the contract, so `text-sm` still means "body"
+     everywhere and only its value changes. Renaming 800 utilities would have
+     been the same change with a diff nobody could review, and it would drift
+     the first time someone typed `text-sm` out of habit.
+
+     Line heights are set with each size because the defaults are tuned to the
+     old values — leaving them makes larger text tighter, not just bigger. */
+  --text-xs: 0.8125rem;        /* 13px, was 12 */
+  --text-xs--line-height: 1.125rem;
+  --text-sm: 0.9375rem;        /* 15px, was 14 — the app's body size */
+  --text-sm--line-height: 1.4rem;
+  --text-base: 1.0625rem;      /* 17px, was 16 */
+  --text-base--line-height: 1.625rem;
+  --text-lg: 1.25rem;          /* 20px, was 18 — every page's h1 */
+  --text-lg--line-height: 1.75rem;
+  --text-xl: 1.5rem;           /* 24px, was 20 */
+  --text-xl--line-height: 2rem;
+  --text-2xl: 1.75rem;         /* 28px, was 24 */
+  --text-2xl--line-height: 2.25rem;
+  --text-3xl: 2.125rem;        /* 34px, was 30 — the summary screen's figures */
+  --text-3xl--line-height: 2.5rem;
+
+  /* The page background and the raised surface, both left as they were. The
+     vibrancy in this palette is carried by the accent and the semantic tones,
+     not by tinting the field the cards sit on — a coloured page was tried on
+     2026-09-18 and reverted: it changes every screen at once, and it was not
+     what was asked for. */
+  --color-ground: #f7f8f9;
+  --color-surface: #ffffff;
+  --color-surface-raised: #eff2f3;
+  /* Deep navy, and the dark panel the priority strip is painted with. Both
+     of these were violets (hue 247: #17123f and #544f85). `ink` is every
+     heading and the large dark band; `ink-soft` is every secondary line in
+     the app — between them they cover more pixels than the accent does, so
+     the purple cast survived changing the accent alone.
+     
+     Rotated to hue ~229 at IDENTICAL luminance, so every ratio in
+     `globals.contrast.test.ts` is unchanged — including `ink-soft` at 0.8
+     alpha, which that file pins to within 0.05 of the 4.5 floor and which
+     still lands on exactly 4.50. Keep that property if either is touched
+     again: change the hue, not the lightness.
+
+     2026-10-12: `ink-soft` taken DARKER, same hue (#46518f -> #323c74), on
+     purpose and against the note above. Every description line sits on the
+     frosted card now, over the moving footage, and at the old value it washed
+     out there ("the text color is not visible properly"). 10.3:1 on white,
+     against 7.4:1; still well clear of `ink`, so secondary still reads as
+     secondary. */
+  --color-ink: #0c153f;
+  --color-ink-soft: #323c74;
+  /* A blue-grey hairline. It was #d6d1f0, a lavender, which put a faint
+     purple edge on every card, input and divider in the app — the single
+     biggest reason the interface read as purple overall, because a border
+     is on screen more often than any accent. */
+  --color-border: #d5dbe8;
+  /* Grounded in LeadByte's own brand indigo (#12126E), taken up to full
+     chroma and held at a BLUE hue — the navy itself is too dark to read as
+     "clickable" and too close to `ink`.
+     
+     It was #5324e8 (hue 254), a violet, which was asked for and then
+     withdrawn on 2026-09-20: at that hue the accent reads as purple rather
+     than as the brand, and it appears on every tab underline, link, focus
+     ring and icon chip, so the whole app took the cast. Hue 229 keeps the
+     indigo character of the brand mark without crossing into violet, and
+     is deliberately not #2563eb (Tailwind's stock blue-600, hue 221) — the
+     objection to that value was that it is every SaaS app's default, and
+     that objection still stands. */
+  --color-accent: #1d3fd1;
+  /* Link text, a shade deeper than the fill. */
+  --color-accent-ink: #1936b8;
+  /* The accent at full brightness, for a word set on the animated
+     background rather than on a card — the one place `accent` reads as
+     muted, because the photograph behind it is full of blue-grey glass.
+     Same hue family; display-size text only. */
+  --color-accent-vivid: #1f4cff;
+  /* The accent as a BACKGROUND, which the palette had no way to express —
+     so anything wanting to carry the brand quietly (a count badge, the
+     header of the panel a screen is built around) fell back to grey. Holds
+     label text, not just tint: see the contrast test. */
+  --color-accent-soft: #dce2fb;
+  /* Saturated up from the muted set these replaced — `good` was a flat pine,
+     `warn` a muddy brown (#8a5309), `crit` a brick. Each is now the colour
+     its name implies, and each still clears 4.5:1 on its own `-soft`
+     background AND on `surface-raised`, where the audit screens put severity
+     counts when a row is open. `good` and `crit` also carry white labels on
+     solid fills, so those pairings are checked too. */
+  --color-good: #07794c;
+  --color-good-soft: #cff6e2;
+  --color-warn: #8a5000;
+  --color-warn-soft: #ffeac2;
+  --color-crit: #c8102e;
+  --color-crit-soft: #ffdde2;
+  --color-info: #0b5fcc;
+  --color-info-soft: #d9e7fd;
+  /* The Website audit design's Month 2 colour (2026-09-28). Decorative
+     only — it carries no status meaning. White on it clears 4.5:1. */
+  --color-violet: #6b3fd4;
+  --color-violet-soft: #ede6fc;
+  /* Category colours for the Connections panels: Analytics (teal) and Website
+     code (slate). Paired like the families above — the ink for icons, the
+     soft for the panel behind them. The teal leans blue on purpose: Email's
+     `good-soft` is a mint green, and a greener teal sat too close to it. */
+  --color-teal: #0f766e;
+  --color-teal-soft: #c6ecf1;
+  --color-slate: #334155;
+  --color-slate-soft: #e2e8f0;
+}
+
+/**
+ * Tailwind 4 changed the default border and divide colour from grey-200 to
+ * `currentColor`. This app has 82 bare `border` classes that relied on the old
+ * default; without this they would all render in the text colour — near-black
+ * boxes around every card. Restoring the token here is deliberate, not inertia:
+ * `border` meaning "the app's border colour" is the convention the components
+ * were written against.
+ */
+@layer base {
+  *,
+  ::before,
+  ::after {
+    border-color: var(--color-border);
+  }
+
+  /**
+   * Tailwind 4's preflight sets `cursor: default` on buttons, following the
+   * browser rather than v3, which set `pointer`. The app was written against
+   * v3, so every button in it stopped looking clickable at the migration —
+   * sixteen had `cursor-pointer` added one at a time before anyone noticed the
+   * pattern. Restored here rather than per button.
+   */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  label:has(> input[type="radio"], > input[type="checkbox"]) {
+    cursor: pointer;
+  }
+
+  /**
+   * Press feedback, for every button at once.
+   *
+   * Buttons here carried a `transition-opacity` with nothing to transition —
+   * no hover colour, no pressed state — so a click was acknowledged only by
+   * whatever the page did next, and on a slow read that is nothing at all. The
+   * app read as inert. Seven buttons had `active:scale` added one at a time
+   * before anyone noticed the pattern; it is the same story as the cursor
+   * above, so it is restored here rather than per button.
+   *
+   * `scale` rather than `transform`, and named properties rather than `all`:
+   * both are compositor-cheap, a scale cannot reflow the row a button sits in,
+   * and `scale` is its own property in Tailwind 4 — so a button that wants a
+   * different press (`active:scale-[0.99]` on the wide ones) overrides this
+   * from the utilities layer rather than compounding with it.
+   */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    transition-property: color, background-color, border-color, opacity, scale;
+    transition-duration: 150ms;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  button:not(:disabled):active,
+  [role="button"]:not([aria-disabled="true"]):active {
+    scale: 0.98;
+  }
+
+  /* The hover colours stay — they are information, not decoration. Only the
+     movement goes. */
+  @media (prefers-reduced-motion: reduce) {
+    button:not(:disabled):active,
+    [role="button"]:not([aria-disabled="true"]):active {
+      scale: 1;
+    }
+  }
+
+  /**
+   * The same acknowledgement for links, which is most of this app's navigation:
+   * every tab, sub-tab and "next step" is a `next/link` anchor, so a press rule
+   * scoped to `button` left the primary way around the product with no response
+   * to a click at all.
+   *
+   * Opacity rather than the buttons' scale, because these are not all
+   * button-shaped — a scaling inline sentence looks like a rendering fault,
+   * while a dip reads as a press on a tab, a card and a word alike. It is not
+   * suppressed under reduced-motion: this is a colour change, not movement.
+   */
+  a[href]:active {
+    opacity: 0.7;
+  }
+
+  /**
+   * Chrome paints a saved email or password on a light-blue fill of its own,
+   * which on the login card read as a stray blue box inside each white field.
+   * Its `background-color` cannot be overridden, so the field is covered from
+   * the inside with our surface colour instead, and the text kept in ink. The
+   * long transition stops the blue flashing in before the cover lands.
+   */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  textarea:-webkit-autofill,
+  select:-webkit-autofill {
+    -webkit-box-shadow: 0 0 0 1000px var(--color-surface) inset;
+    box-shadow: 0 0 0 1000px var(--color-surface) inset;
+    -webkit-text-fill-color: var(--color-ink);
+    caret-color: var(--color-ink);
+    transition: background-color 9999s ease-out 0s;
+  }
+}
+
+html {
+  /* Makes native UI — scrollbars, form controls, autofill — match the theme. */
+  color-scheme: light;
+}
+
+/* The whole app scales down on a laptop-sized window, so a 14" or 15" screen
+   shows the same layout as a monitor, only smaller — not a squeezed one.
+   Every size, gap, radius and column width is in rem, so the root font size
+   is the one dial. Full size from 1440 wide AND 900 tall; whichever side is
+   short sets the scale, because a 1536x864 laptop (a 1920 panel at 125%) is
+   wide enough and still too short. Never below 14px, and phones and tablets
+   (under 64rem — media queries read the browser's 16px, not this) are left
+   exactly as they were. */
+@media (min-width: 64rem) {
+  html {
+    font-size: clamp(14px, min(1.1112vw, 1.7778vh), 16px);
+  }
+}
+
+/**
+ * No visible scrollbars, anywhere. Asked for on 2026-09-23: the page's grey
+ * bar sat over the animated background as a strip down the right edge.
+ *
+ * This hides the BAR, not the ability to scroll — wheel, trackpad, touch,
+ * keyboard and the scroll-driven card stacks all work exactly as before.
+ * `scrollbar-width` covers Firefox and current Chromium; the WebKit rule
+ * covers Safari and older Chromium. It also means the page no longer changes
+ * width when a scrollbar appears or disappears between pages.
+ */
+* {
+  scrollbar-width: none;
+}
+
+*::-webkit-scrollbar {
+  display: none;
+}
+
+/**
+ * With no scrollbars, a wide table that scrolls inside its box gives no sign
+ * that columns are hiding past its edge — the Meta campaign grid and the
+ * admin tables cut a column mid-word on laptop widths (2026-10-07). This
+ * draws a soft shadow on whichever side has more to scroll to, and nothing
+ * when the table fits. Pure CSS: the `local` covers ride along with the
+ * content and hide the `scroll` shadows once an end is reached.
+ * Replaces `bg-surface` on the scrolling wrapper; a cell with its own
+ * background (a sticky first column) covers that side's shadow, which is fine.
+ */
+@utility scroll-x-hint {
+  background:
+    linear-gradient(to right, var(--color-surface) 40%, transparent) left center / 2.5rem 100% no-repeat local,
+    linear-gradient(to left, var(--color-surface) 40%, transparent) right center / 2.5rem 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, rgb(15 23 42 / 0.14), transparent) left center / 0.875rem 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, rgb(15 23 42 / 0.14), transparent) right center / 0.875rem 100% no-repeat scroll,
+    var(--color-surface);
+}
+
+body {
+  @apply bg-ground text-ink;
+}
+
+/**
+ * Dialog entry.
+ *
+ * `modal-motion`: a modal should animate in rather than snap, so it reads as
+ * arriving over the page instead of replacing it. Scale + fade only — both are
+ * compositor properties, so this never triggers layout.
+ *
+ * Kept in CSS rather than a motion library: it is one 180ms transition on one
+ * element, and the native <dialog> already owns the open/close lifecycle.
+ */
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/**
+ * Centres a modal dialog.
+ *
+ * The browser centres `<dialog>` with `margin: auto` against `inset: 0`, and
+ * Tailwind's preflight zeroes the margin on every element — so every modal in
+ * the app rendered pinned to the top-left corner, over the nav. It looked like
+ * a layout bug in each component; it was one line of the reset, once.
+ *
+ * `:modal` rather than `[open]`: a non-modal `<dialog open>` is an inline
+ * element in normal flow and must not be centred over the page.
+ */
+dialog:modal {
+  margin: auto;
+}
+
+dialog[open] {
+  animation: dialog-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+dialog[open]::backdrop {
+  animation: backdrop-in 180ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  dialog[open],
+  dialog[open]::backdrop {
+    animation: none;
+  }
+}
+
+/* The indeterminate sweep for `RouteProgress`.
+
+   Indeterminate on purpose: a full document load emits no progress events, so
+   a percentage would be invented. It travels to show work is happening and
+   never claims to know how much is left. */
+/* ── Loading: the one animation ────────────────────────────────────────────
+   A ring turning — see `PageLoading` for why there is only one of these in
+   the app. Animates `transform` alone, so it costs nothing while a page is
+   streaming behind it. */
+@keyframes page-loading {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-page-loading {
+  animation: page-loading 0.9s linear infinite;
+}
+
+/* Reduced motion means gentler, not nothing: a ring that stops turning reads
+   as finished. It stays still and pulses instead, so it still says "working". */
+@keyframes page-loading-reduced {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-page-loading {
+    animation: page-loading-reduced 1.6s ease-in-out infinite;
+  }
+}
+
+/* ── The cross-channel timeline's lane wipe ───────────────────────────────
+   Left-to-right, because the x-axis is time: uncovering in that direction is
+   the data arriving in the order it happened.
+
+   In CSS, not Motion, for two reasons. It is predetermined motion that runs
+   once on mount with nothing to interrupt it, which is what CSS is for. And
+   Motion writes `transform-origin: 50% 50%` itself whenever it animates a
+   transform, overriding the style prop — so the wipe opened from the middle
+   outwards. Its `originX` prop is not typed for SVG elements here, and CSS
+   has no such conflict. (Animation review, 2026-09-20.)
+
+   It scales rather than animating `width`, which would re-lay-out the rect on
+   every frame. */
+@keyframes lane-wipe {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* Google Ads' daily hours, hidden for the goals Google allows none for
+   (local store visits and the two app goals — legacy flow guide §3), with the
+   matching explanation shown in their place (`meta-schedule-fields.tsx`, the
+   google variant). Pure CSS on the goal the form currently shows, so the two
+   islands need not share state; `readGoogleAdsForm` drops the hours for those
+   goals whatever is posted. Unlayered, so it beats the notes' `hidden`. */
+form:has(select[name="goal"] option:is([value="local_store"], [value="app_promo"], [value="app_actions"]):checked)
+  .ads-schedule-hours {
+  display: none;
+}
+form:has(select[name="goal"] option[value="local_store"]:checked) .ads-schedule-note-local,
+form:has(select[name="goal"] option:is([value="app_promo"], [value="app_actions"]):checked) .ads-schedule-note-app {
+  display: block;
+}
+
+/* The agent dashboard's bar rows grow from the left (`BarRow`). Scale, not
+   width, for the same reason as the lanes above; `motion-safe:` on the class
+   leaves reduced-motion readers with the bar already drawn. */
+@keyframes bar-grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.lane-wipe {
+  transform-box: fill-box;
+  transform-origin: left;
+  animation: lane-wipe 0.25s cubic-bezier(0.23, 1, 0.32, 1) both;
+  animation-delay: var(--delay, 0ms);
+}
+
+/* The mask must end up fully open, so reduced motion skips straight there —
+   a masked chart that never reveals is an empty chart. */
+@media (prefers-reduced-motion: reduce) {
+  .lane-wipe {
+    animation: none;
+  }
+}
+
+/* ── Perpetual: the status dot breathes ───────────────────────────────────
+   A slow opacity pulse on a status marker, so a screen full of agent tiles
+   reads as live rather than as a printout. 2.4s, opacity only — no movement,
+   nothing that reflows, and cheap enough to run on nine dots at once.
+
+   It is deliberately NOT on every dot. A dot marking "not started" is a
+   static fact and pulsing it would claim activity that is not happening;
+   only states that mean something is running get this. Motion that lies
+   about the data is worse than no motion. */
+/* ── The scroll cue ───────────────────────────────────────────────────────
+   A 4px nudge on the chevron under "Scroll to explore". Modelled on
+   `status-breathe` below, including its timing: one slow loop that reads as
+   breathing rather than as something demanding attention.
+
+   This is the one animation in the app where reduced motion means GONE rather
+   than gentler. The others report a state or a transition the reader would
+   otherwise miss; an infinite decorative loop has nothing to say the static
+   chevron does not, and it is exactly the kind of perpetual movement the
+   preference exists to stop. */
+/* ── The presence flow's line ─────────────────────────────────────────────
+   The signal line in the Overview intro draws itself once on arrival. It is
+   a stroke-dashoffset wipe rather than a fade, so the line reads as being
+   TRACED — which is the point of drawing the account's presence as a signal
+   rather than as a static diagram.
+
+   `both` holds the start frame during the delay, or the line would flash in
+   fully drawn before the animation begins.
+
+   Gone rather than gentler under reduced motion, the same call as the scroll
+   cue below: the drawn line carries no information the static line does not,
+   and `stroke-dashoffset` on a path is exactly the kind of motion the
+   preference exists to stop. The `dasharray` is cleared too, or the line
+   would be left as dashes. */
+@keyframes flow-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Paired with `pathLength={1}` on the path, which normalises every segment to
+   one unit so a single duration suits a long segment and a short one alike. */
+.flow-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: flow-draw 0.7s ease-out 0.2s both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-draw {
+    animation: none;
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
+  }
+}
+
+/**
+ * Text set straight on the animated background, with no tint behind it.
+ *
+ * A white wash over the footage was removed on request, which left the
+ * Overview's opening copy sitting on a busy photograph — dark chairs, bright
+ * windows, a floating dashboard. This lifts each glyph instead of the whole
+ * field: a tight 1px edge that separates the letter from whatever is behind
+ * it, and a wide soft halo that quiets the photo just around the words. The
+ * footage between lines and around the block is untouched.
+ */
+.on-photo {
+  text-shadow:
+    0 1px 1px rgb(255 255 255 / 0.9),
+    0 0 12px rgb(255 255 255 / 0.85),
+    0 0 28px rgb(255 255 255 / 0.6);
+}
+
+@keyframes scroll-cue {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(4px);
+  }
+}
+
+.scroll-cue {
+  animation: scroll-cue 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll-cue {
+    animation: none;
+  }
+}
+
+/* The cue is an anchor to the first card. Without this the jump is
+   instantaneous and the reader has no idea the page moved rather than
+   replaced itself — and `scroll-mt-32` on the card is what stops it landing
+   under the sticky band. Gated on the preference: a smooth scroll is motion
+   the reader did not ask for. */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@keyframes status-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.status-breathe {
+  animation: status-breathe 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-breathe {
+    animation: none;
+  }
+}
+
+/* ── Hover motion must be gated to real pointers ──────────────────────────
+   Tailwind's `hover:` compiles to a bare `:hover`, which a touchscreen fires
+   on tap — so an element that lifts or slides on hover does it UNDER the
+   finger that just tapped it, and then stays lifted until something else is
+   tapped. Colour changes on tap are unobjectionable; movement is not.
+
+   `hover-lift` and `hover-nudge` carry the motion instead, behind a real
+   pointer query. Put the transition on the element as usual; these only add
+   the movement. (Animation review, 2026-09-20 — the codebase had no hover
+   gating anywhere.) */
+@media (hover: hover) and (pointer: fine) {
+  .group:hover .hover-lift {
+    transform: translateY(-2px);
+  }
+  .group:hover .hover-nudge {
+    transform: translateX(2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hover-lift,
+  .hover-nudge {
+    transform: none !important;
+  }
+}
+
+/* ── Overview: one entrance, staggered, ONCE PER DOCUMENT ─────────────────
+   Scoped to `/overview` alone, not folded into the site's one loading
+   animation above — this fires once the real dashboard has already
+   committed, not while the page is still arriving. Kept to a single
+   `transform`/`opacity` pair for the same reason `page-loading` above only
+   animates `transform`.
+
+   Two things here came out of an animation review (2026-09-20) and must not
+   drift back:
+
+   1. **450ms, and the sub-300ms rule does not apply here.** That rule is
+      for motion that ANSWERS something the reader just did — a menu
+      opening, a button pressing — where the animation is in their way.
+      This is a once-per-document entrance nobody is waiting on, and at
+      250ms it was over before it registered ("completing very fast",
+      2026-09-21). It was 600ms before that and genuinely too slow, with a
+      180ms stagger putting the last section 780ms out; 450ms with the 90ms
+      stagger lands everything inside 800ms and is the middle ground.
+      Do not take it back to 600.
+
+   2. **It runs once per document load, not on every mount.** `/overview` is
+      the home tab, opened tens of times a day, and the 30s router cache
+      makes returning to it otherwise instant. `OverviewDashboard` holds a
+      module-level flag and stops applying this class after the first mount
+      — see the note there. A full reload is a genuine first visit and
+      earns it again. */
+@keyframes reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.reveal-up {
+  animation: reveal-up 0.45s cubic-bezier(0.23, 1, 0.32, 1) both;
+  animation-delay: var(--delay, 0ms);
+}
+
+/* Gentler, not gone: the sections still fade up into place without the
+   movement. Reduced motion means fewer and softer animations, not zero. */
+@media (prefers-reduced-motion: reduce) {
+  .reveal-up {
+    animation: reveal-fade 0.3s ease both;
+    animation-delay: 0ms;
+  }
+}
+
+@keyframes reveal-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ── Overview: the cards BELOW the fold reveal on scroll ──────────────────
+   `/overview` is 1694px tall in an 872px viewport, so five of its eight cards
+   start below the fold. They used to animate on mount with the two visible
+   sections, which meant they finished long before the reader scrolled to them
+   — motion played to an empty room, paid for and never seen. These reveal as
+   they arrive instead, staggered per card.
+
+   A TRANSITION, not a keyframe animation: transitions can be interrupted and
+   retargeted, so scrolling a card half into view and straight back out stops
+   where it is instead of snapping. It is also driven by an attribute rather
+   than a class so the from-state is always in the cascade, which is what
+   makes the reduced-motion rule below able to override it.
+
+   It fires ONCE per element — `useRevealOnView` disconnects the observer on
+   first intersection. Re-revealing on every scroll-past would put motion on a
+   high-frequency interaction, which is exactly what the entrance gate in
+   `overview-dashboard.tsx` exists to prevent. */
+/* The values here are deliberately BIGGER than this app's other motion, and
+   that is the second attempt. The first used the house 8px / 250ms, and it
+   was measurably running and completely imperceptible — reported as "I
+   didn't see any type of animation", and correctly.
+
+   A scroll reveal does not compete with a still page, it competes with the
+   scroll itself. While the reader drags, the whole page is translating
+   hundreds of pixels, so an 8px offset is lost inside that movement and a
+   250ms fade reads as ordinary rendering. 24px and 420ms clear that
+   threshold; the slight scale helps more than the translate does, because a
+   size change is not something scrolling also produces.
+
+   420ms is over the 300ms UI budget on purpose. That budget governs a
+   control answering a click, where latency is the cost. This is content
+   arriving as you scroll to it — explanatory motion, which the same rule
+   set allows to run longer — and it is capped at once per card per visit. */
+/* NOTE the direction of this: the default is VISIBLE, and the hidden state is
+   opt-in via `data-inview="pending"`, which only client JS ever sets.
+   
+   The first version had it the other way round — `opacity: 0` by default,
+   revealed by JS. That means five cards carrying the audit score, the AI
+   visibility score, cost per conversion, the agent list and the business
+   summary are hidden by a stylesheet and wait on JavaScript to become
+   readable. Anything that stops the observer firing leaves the middle of the
+   screen blank, and it fails silently. Content does not depend on JS to be
+   legible; the animation is the enhancement. */
+.reveal-on-view[data-inview="pending"] {
+  opacity: 0;
+  transform: translateY(32px) scale(0.97);
+}
+
+.reveal-on-view[data-inview="true"] {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  /* 0.7s, not 0.42s. This is a card arriving as the reader scrolls to it,
+     not a response to a press — the long tail of the easing is the point,
+     and at 0.42s it was finished before the eye reached it. */
+  transition:
+    opacity 0.7s cubic-bezier(0.23, 1, 0.32, 1),
+    transform 0.7s cubic-bezier(0.23, 1, 0.32, 1);
+  transition-delay: var(--delay, 0ms);
+}
+
+/* The resting state here is `opacity: 0`, so this block has to restore
+   VISIBILITY, not merely remove the transition. Dropping only the transition
+   would leave a reduced-motion reader with five permanently invisible cards —
+   a silent, total failure. Both selectors are set for that reason. */
+@media (prefers-reduced-motion: reduce) {
+  .reveal-on-view[data-inview="pending"],
+  .reveal-on-view[data-inview="true"] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* ── The real thing: scroll-DRIVEN, per card ──────────────────────────────
+   Everything above is a fallback. Where the browser supports scroll-driven
+   animations, each card is tied to its OWN position in the viewport rather
+   than playing a fixed clip when a trigger fires.
+
+   The difference is the whole point, and three attempts missed it. A
+   triggered clip runs for 420ms on its own clock no matter what you do — if
+   you stop scrolling halfway, it finishes anyway; if you scroll back, it
+   does nothing. This moves WITH the scroll: half way into its range the card
+   is half revealed, and reversing the scroll reverses the card. The reader
+   is driving it.
+
+   `animation-timeline: view()` gives each element a timeline from its own
+   intersection with the scrollport, so there is one per card with no
+   JavaScript and no observer. `animation-range: entry 0% entry <n>%` runs it
+   across the first n% of that card's entry, and varying n per card is what
+   staggers a row — a scroll-position offset rather than a time delay, which
+   is the only kind of stagger that means anything when the clock is the
+   scrollbar.
+
+   CSS animations beat normal declarations in the cascade, so this overrides
+   the `[data-inview]` states above without needing to undo them. */
+@supports (animation-timeline: view()) {
+  @keyframes card-scroll-reveal {
+    from {
+      opacity: 0;
+      transform: translateY(40px) scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .reveal-on-view {
+    animation: card-scroll-reveal linear both;
+    animation-timeline: view();
+    animation-range: entry 0% entry var(--range-end, 55%);
+  }
+
+  /* Movement is the mechanism here, so reduced motion drops the animation
+     entirely and leaves the card plainly visible. */
+  @media (prefers-reduced-motion: reduce) {
+    .reveal-on-view {
+      animation: none;
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
+/* ── Print: the report as a PDF ────────────────────────────────────────────
+   `DownloadPdfButton` calls `window.print()`, so these rules ARE the PDF.
+   Everything here is about turning an app screen into a document: drop the
+   navigation, stop cards splitting across pages, and make sure the colours
+   survive a printer that would otherwise drop backgrounds. */
+@media print {
+  @page {
+    size: A4;
+    /* Room for the browser's own header/footer without it landing on text. */
+    margin: 14mm 12mm;
+  }
+
+  /* Printers drop backgrounds by default, which would take the score tiles
+     and severity badges with them — those carry meaning here, not decoration. */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+  }
+
+  /* The app's chrome is not part of the report. Anything that navigates,
+     submits or scrolls is noise on paper. */
+  header,
+  nav,
+  [role="tablist"] {
+    display: none !important;
+  }
+
+  /* Scroll containers have no meaning on paper — an `overflow` box would clip
+     the content it was scrolling. */
+  [class*="overflow-"] {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+
+  /* `PageContainer` centres the page inside a 1440px column. On A4 that
+     column is wider than the sheet, so the cap has to come off as well as the
+     padding — otherwise the report prints inside a box it cannot fill. */
+  main {
+    padding: 0 !important;
+    max-width: none !important;
+    margin: 0 !important;
+  }
+}
+
+/* Page-break defaults, in the BASE layer so a component can overrule them
+   with a utility. Unlayered, `.rounded-lg { break-inside: avoid }` beat every
+   `print:break-inside-auto` in the app — so a long section (the findings, the
+   keyword table, the per-page list) could not split, jumped whole to the next
+   page and left most of the one before it blank (SEO audit PDF, 2026-10-08). */
+@layer base {
+  @media print {
+    /* A card broken across a page boundary loses its heading, so the second
+       half reads as unlabelled data. A card too long for one page says so
+       with `print:break-inside-auto`, and its rows then hold together. */
+    .rounded-lg,
+    .rounded-xl {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    h1,
+    h2,
+    h3 {
+      break-after: avoid;
+      page-break-after: avoid;
+    }
+
+    /* Tables of findings should keep going rather than each row floating. */
+    tr,
+    li {
+      break-inside: avoid;
+    }
+
+    /* In a downloaded report, the OUTER cards may run on to the next page
+       (2026-10-13). Held whole, any card taller than what was left of a page
+       jumped to the next one and left the rest of the page blank — "empty
+       white spaces" in every PDF. Now a card breaks only BETWEEN the things in
+       it: its heading stays with what follows (`h2` above), and the pieces
+       inside it — tiles, rows, list items, nested cards — still hold
+       together. `clone` gives each half its own border and padding, so the
+       part on the next page still reads as a card. */
+    .pdf-frame-body .rounded-lg:not(:is(.rounded-lg, .rounded-xl) *),
+    .pdf-frame-body .rounded-xl:not(:is(.rounded-lg, .rounded-xl) *) {
+      break-inside: auto;
+      page-break-inside: auto;
+      -webkit-box-decoration-break: clone;
+      box-decoration-break: clone;
+    }
+    /* A line on its own at the top or foot of a page reads as a stray. */
+    .pdf-frame-body p {
+      orphans: 2;
+      widows: 2;
+    }
+  }
+}
+
+/* A report never prints wider than the page (2026-10-13). A table that
+   scrolls sideways on screen (`min-w-[640px]` inside `overflow-x-auto`) has
+   no scroll on paper — the print rules make overflow visible — so it pushed
+   the page wider than A4, and the browser shrank the WHOLE page to fit: the
+   cards came out wider than the bands and the side of every page sat empty.
+   Here a table takes the page's width and its cells wrap. */
+@media print {
+  .pdf-frame-body table {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  .pdf-frame-body th,
+  .pdf-frame-body td {
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+  }
+  .pdf-frame-body img,
+  .pdf-frame-body svg {
+    max-width: 100%;
+  }
+}
+
+/* ── The branded PDF frame (`components/ui/pdf-report-frame.tsx`) ─────────
+   On screen: nothing. The bands are not shown and the table parts dissolve
+   (`display: contents`), so the report lays out exactly as it did before —
+   its children stay flex items of `PageContainer`. In print: the template
+   (`LeadByte_SEO_Audit_Template_v2.pdf`) on every page. */
+/* CHILD combinators only: the report itself contains tables, and a bare
+   `.pdf-frame-table tr` dissolved THEIR rows too — the page list rendered as
+   one sideways row on screen (2026-10-02). */
+.pdf-frame,
+.pdf-frame-table,
+.pdf-frame-table > tbody,
+.pdf-frame-table > tbody > tr,
+.pdf-frame-body {
+  display: contents;
+}
+.pdf-frame-header,
+.pdf-frame-footer,
+.pdf-frame-table > thead,
+.pdf-frame-table > tfoot {
+  display: none;
+}
+
+@media print {
+  /* The template's brand print colours, here and nowhere else. */
+  .pdf-frame {
+    --print-navy: #262063;
+    --print-orange: #fbb03b;
+    --print-muted: #6b7280;
+    --print-grey: #f3f4f6;
+    --pdf-head: 46mm;
+    --pdf-foot: 52mm;
+    --pdf-side: 16mm;
+    display: block;
+  }
+
+  /* One named page per report, so the page line can name it. */
+  .pdf-frame-seo {
+    page: pdf-frame-seo;
+  }
+  .pdf-frame-geo {
+    page: pdf-frame-geo;
+  }
+
+  .pdf-frame-header,
+  .pdf-frame-footer {
+    display: block;
+    position: fixed;
+    left: 0;
+    right: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    color: var(--print-navy);
+  }
+  .pdf-frame-header {
+    top: 0;
+    height: var(--pdf-head);
+  }
+  .pdf-frame-footer {
+    bottom: 0;
+    height: var(--pdf-foot);
+    padding: 0 var(--pdf-side);
+  }
+
+  .pdf-frame-topband {
+    background: var(--print-navy);
+    color: #ffffff;
+    text-align: center;
+    font-size: 10pt;
+    padding: 3mm 0;
+  }
+  .pdf-frame-orange {
+    color: var(--print-orange);
+    text-decoration: none;
+  }
+  .pdf-frame-brand {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 0 var(--pdf-side);
+    padding: 5mm 0 3mm;
+    border-bottom: 0.6mm solid var(--print-orange);
+  }
+  .pdf-frame-logo {
+    height: 12mm;
+    width: auto;
+  }
+  .pdf-frame-tagline {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1mm;
+  }
+  .pdf-frame-pill {
+    background: var(--print-orange);
+    color: var(--print-navy);
+    font-weight: 700;
+    font-size: 10pt;
+    border-radius: 999px;
+    padding: 1.6mm 6mm;
+    margin-bottom: 1mm;
+  }
+  .pdf-frame-tag-strong {
+    font-weight: 700;
+    font-size: 9.5pt;
+  }
+  .pdf-frame-tag-soft {
+    color: var(--print-muted);
+    font-size: 8.5pt;
+  }
+  .pdf-frame-topics {
+    display: flex;
+    justify-content: space-around;
+    margin: 2mm var(--pdf-side) 0;
+    padding: 2mm 4mm;
+    background: var(--print-grey);
+    border-radius: 999px;
+    font-size: 8.5pt;
+    font-weight: 700;
+  }
+  .pdf-frame-dot {
+    display: inline-block;
+    width: 2.2mm;
+    height: 2.2mm;
+    border-radius: 999px;
+    background: var(--print-orange);
+    margin-right: 2mm;
+    vertical-align: middle;
+  }
+
+  .pdf-frame-panel {
+    background: var(--print-navy);
+    color: #ffffff;
+    border-top: 1mm solid var(--print-orange);
+    padding: 4mm 6mm 3mm;
+  }
+  .pdf-frame-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4mm;
+  }
+  .pdf-frame-panel-title {
+    font-size: 13pt;
+    font-weight: 700;
+  }
+  .pdf-frame-panel-sub {
+    font-size: 8.5pt;
+    color: #c7c9e0;
+    margin-top: 1mm;
+  }
+  .pdf-frame-cta {
+    background: var(--print-orange);
+    color: var(--print-navy);
+    font-weight: 700;
+    font-size: 9pt;
+    border-radius: 999px;
+    padding: 2.4mm 6mm;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .pdf-frame-offers {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4mm;
+    margin-top: 4mm;
+    padding-bottom: 3mm;
+    border-bottom: 0.2mm solid rgb(255 255 255 / 0.18);
+  }
+  .pdf-frame-offer-title {
+    font-weight: 700;
+    font-size: 9pt;
+  }
+  .pdf-frame-offer-line {
+    font-size: 7.5pt;
+    color: #c7c9e0;
+    margin: 0.8mm 0 0 4.2mm;
+  }
+  .pdf-frame-contact {
+    display: flex;
+    justify-content: space-between;
+    font-size: 8.5pt;
+    padding-top: 2.5mm;
+  }
+  .pdf-frame-contact em {
+    color: #c7c9e0;
+  }
+  .pdf-frame-contact a {
+    font-weight: 700;
+  }
+
+  /* The report, between the bands on every page. */
+  .pdf-frame-table {
+    display: table;
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .pdf-frame-table > thead {
+    display: table-header-group;
+  }
+  .pdf-frame-table > tfoot {
+    display: table-footer-group;
+  }
+  .pdf-frame-table > tbody {
+    display: table-row-group;
+  }
+  .pdf-frame-table > thead > tr,
+  .pdf-frame-table > tfoot > tr,
+  .pdf-frame-table > tbody > tr {
+    display: table-row;
+    /* The report is ONE row: "rows don't split" (above) would make it
+       unbreakable and clip everything after page one. */
+    break-inside: auto;
+  }
+  .pdf-frame-body {
+    display: table-cell;
+    padding: 0 var(--pdf-side);
+  }
+  /* The report's own sections keep their gap now the flex parent is gone. */
+  .pdf-frame-body > * + * {
+    margin-top: 4mm;
+  }
+  .pdf-frame-head-space {
+    height: calc(var(--pdf-head) + 4mm);
+  }
+  .pdf-frame-foot-space {
+    /* 8mm, not 4: at 4 the last line of a full page sat against the banner. */
+    height: calc(var(--pdf-foot) + 8mm);
+  }
+
+  /* No page margin at the top or sides — the navy band runs edge to edge —
+     and the bottom margin holds the page line. */
+  @page pdf-frame-seo {
+    size: A4;
+    margin: 0 0 9mm 0;
+    @bottom-center {
+      content: "LeadByte | SEO Audit | Page " counter(page);
+      font: 7.5pt Arial, Helvetica, sans-serif;
+      color: #6b7280;
+    }
+  }
+  @page pdf-frame-geo {
+    size: A4;
+    margin: 0 0 9mm 0;
+    @bottom-center {
+      content: "LeadByte | GEO Analysis | Page " counter(page);
+      font: 7.5pt Arial, Helvetica, sans-serif;
+      color: #6b7280;
+    }
+  }
+}
+
+/* ── Sign in / sign up (`components/auth/auth-shell.tsx`) ─────────────────
+   The photograph behind the form, the wash that makes the left half
+   readable, and the frosted card. Classes rather than utility strings
+   because each is several layered values that only make sense together. */
+
+/* Pale on the left, where the headline sits on the photo, and clear with a
+   faint blue on the right, where the card carries its own backing. */
+.auth-wash {
+  background: linear-gradient(
+    90deg,
+    rgb(248 250 255 / 0.86) 0%,
+    rgb(244 248 255 / 0.62) 30%,
+    rgb(236 242 255 / 0.1) 55%,
+    rgb(236 242 255 / 0) 100%
+  );
+}
+
+/* Below `lg` the card sits over the whole photo, left half included, so the
+   wash evens out rather than fading to clear. */
+@media (max-width: 1023px) {
+  .auth-wash {
+    background: rgb(245 248 255 / 0.82);
+  }
+}
+
+.auth-card {
+  background: rgb(255 255 255 / 0.92);
+  border: 1px solid rgb(255 255 255 / 0.9);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.9),
+    0 30px 80px -24px rgb(12 21 63 / 0.28),
+    0 2px 6px rgb(12 21 63 / 0.05);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+}
+
+.auth-chip {
+  background: rgb(255 255 255 / 0.72);
+  border: 1px solid rgb(255 255 255 / 0.95);
+  box-shadow: 0 6px 18px -8px rgb(29 63 209 / 0.3);
+}
+
+/* Glass is an effect, not the content: whoever asks for less transparency
+   gets solid white, which reads just as well. */
+@media (prefers-reduced-transparency: reduce) {
+  .auth-card,
+  .auth-chip {
+    background: var(--color-surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* The photo settles into place as the page arrives: a slow 4% zoom-out,
+   long enough to read as a camera easing back rather than as a jump. It runs
+   once, behind everything, and is gone before anyone reaches for the form.
+   Scale only, so it stays on the compositor even with the blur. */
+@keyframes auth-backdrop-in {
+  from {
+    transform: scale(1.04);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+.auth-backdrop {
+  animation: auth-backdrop-in 1.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-backdrop {
+    animation: none;
+  }
+}
+
+/* ---------- The website entry screen (`/`) ---------- */
+
+/* The cards' slow drift. Only under `motion-safe:`, so reduced motion keeps
+   them still. */
+@keyframes entry-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+/* The soft field behind the entry screen: a cool white with blue, violet and
+   rose light pooled at the edges, and a faint sweep across the lower left —
+   all from the palette tokens, so a palette change reaches it too. */
+.entry-backdrop {
+  background-color: var(--color-surface);
+  background-image:
+    radial-gradient(60rem 36rem at 12% 8%, color-mix(in oklab, var(--color-accent-soft) 55%, transparent), transparent 70%),
+    radial-gradient(48rem 30rem at 92% 18%, color-mix(in oklab, var(--color-accent-soft) 45%, transparent), transparent 70%),
+    radial-gradient(40rem 26rem at 4% 78%, color-mix(in oklab, var(--color-crit-soft) 35%, transparent), transparent 70%),
+    radial-gradient(56rem 30rem at 86% 88%, color-mix(in oklab, var(--color-violet-soft) 45%, transparent), transparent 72%),
+    linear-gradient(180deg, color-mix(in oklab, var(--color-accent-soft) 12%, var(--color-surface)), var(--color-surface));
+}

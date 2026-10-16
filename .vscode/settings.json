@@ -1,0 +1,9 @@
+{
+  // Hides the co-located test files from the Explorer so each folder shows only
+  // its real code. They are still in git, still run with `npm test`, and still
+  // open from a link or the terminal. Set any line to false to show them again.
+  "files.exclude": {
+    "**/*.test.ts": true,
+    "**/*.test.tsx": true
+  }
+}

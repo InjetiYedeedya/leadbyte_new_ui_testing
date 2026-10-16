@@ -1,0 +1,4 @@
+# Served as a plain file so a crawler asking for it does not run the app.
+# Same meaning as the old 404: everything may be crawled.
+User-agent: *
+Disallow:

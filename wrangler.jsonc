@@ -1,0 +1,55 @@
+{
+  // Cloudflare Worker for the Next.js app, built by OpenNext
+  // (`opennextjs-cloudflare build` writes .open-next/). The Worker in the
+  // Cloudflare dashboard MUST be named exactly as `name` below.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "leadbyte-app",
+  // Our own entry, wrapping the Worker OpenNext builds: it answers the
+  // background video and bot probes before Next starts (Error 1102, the 10ms
+  // CPU limit — see lib/edge/front-door.ts).
+  "main": "worker.ts",
+  "compatibility_date": "2026-09-01",
+  // nodejs_compat: Server Actions, cookies and crypto run on Node APIs.
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  // next/image resizing (the login photo, logos) goes through Cloudflare Images.
+  "images": {
+    "binding": "IMAGES"
+  },
+  // Lets the Worker call itself, which OpenNext uses for some internal routing.
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "leadbyte-app"
+    }
+  ],
+  // Keep the variables set in the Cloudflare dashboard. Without this, every
+  // `wrangler deploy` replaces the Worker's plain-text variables with the
+  // (empty) list in this file, wiping LEADBYTE_API_URL, APP_URL and the rest.
+  // Secrets survive either way.
+  "keep_vars": true,
+  "observability": {
+    "enabled": true
+  },
+  // A throwaway TEST Worker: `opennextjs-cloudflare deploy --env test` makes
+  // `leadbyte-app-test` on a workers.dev URL, with no domain or route, so it
+  // cannot touch the live site. Bindings are not inherited by environments,
+  // so the self-reference is redeclared pointing at the TEST name.
+  "env": {
+    "test": {
+      "name": "leadbyte-app-test",
+      "images": {
+        "binding": "IMAGES"
+      },
+      "services": [
+        {
+          "binding": "WORKER_SELF_REFERENCE",
+          "service": "leadbyte-app-test"
+        }
+      ]
+    }
+  }
+}
